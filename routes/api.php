@@ -6,6 +6,7 @@ use App\Http\Controllers\FolderController;
 use App\Http\Controllers\WorkflowController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\TagController;
+use App\Http\Controllers\AuditController;
 use Illuminate\Support\Facades\Route;
 
 // ── Authentification (routes publiques) ───────────────────────────────────
@@ -27,11 +28,11 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Documents
     Route::apiResource('documents', DocumentController::class);
-    Route::get('/documents/{document}/download', [DocumentController::class, 'download']);
-    Route::get('/documents/{document}/preview',  [DocumentController::class, 'preview']);
-    Route::post('/documents/{document}/archive', [DocumentController::class, 'archive']);
-    Route::post('/documents/{document}/restore', [DocumentController::class, 'restore']);
-    Route::post('/documents/{document}/comments',[DocumentController::class, 'addComment']);
+    Route::get('/documents/{document}/download',  [DocumentController::class, 'download']);
+    Route::get('/documents/{document}/preview',   [DocumentController::class, 'preview']);
+    Route::post('/documents/{document}/archive',  [DocumentController::class, 'archive']);
+    Route::post('/documents/{document}/restore',  [DocumentController::class, 'restore']);
+    Route::post('/documents/{document}/comments', [DocumentController::class, 'addComment']);
 
     // Dossiers
     Route::apiResource('folders', FolderController::class);
@@ -46,6 +47,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/workflows/{workflow}/reject',  [WorkflowController::class, 'reject']);
     Route::post('/workflows/{workflow}/cancel',  [WorkflowController::class, 'cancel']);
     Route::get('/pending-approvals',             [WorkflowController::class, 'pendingApprovals']);
+
+    // Journal d'audit
+    Route::get('/audit',        [AuditController::class, 'index']);
+    Route::get('/audit/export', [AuditController::class, 'export']);
+    Route::get('/audit/stats',  [AuditController::class, 'stats']);
 
     // Utilisateurs
     Route::get('/users', function () {
