@@ -31,6 +31,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/documents/{document}/archive',  [DocumentController::class, 'archive']);
     Route::post('/documents/{document}/restore',  [DocumentController::class, 'restore']);
     Route::post('/documents/{document}/comments', [DocumentController::class, 'addComment']);
+    Route::get('/documents/{document}/preview', [DocumentController::class, 'preview']);
 
     // Dossiers
     Route::apiResource('folders', FolderController::class);
