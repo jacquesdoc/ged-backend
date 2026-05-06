@@ -12,6 +12,7 @@ use App\Http\Controllers\UserGroupController;
 use App\Http\Controllers\NotificationController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\DeletionRequestController;
+use App\Http\Controllers\ProfileController;
 
 // ── Authentification publique ──────────────────────────────────────────────
 Route::prefix('auth')->group(function () {
@@ -85,4 +86,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/deletion-requests/{deletionRequest}/approve',[DeletionRequestController::class, 'approve']);
     Route::post('/deletion-requests/{deletionRequest}/reject', [DeletionRequestController::class, 'reject']);
     Route::get('/my-deletion-requests',                       [DeletionRequestController::class, 'myRequests']);
+
+    // Profil utilisateur
+    Route::get('/profile',                          [ProfileController::class, 'show']);
+    Route::put('/profile',                          [ProfileController::class, 'update']);
+    Route::post('/profile/avatar',                  [ProfileController::class, 'uploadAvatar']);
+    Route::put('/profile/password',                 [ProfileController::class, 'changePassword']);
+    Route::put('/profile/notifications',            [ProfileController::class, 'updateNotifications']);
+    Route::delete('/profile/sessions/{tokenId}',    [ProfileController::class, 'revokeSession']);
+    Route::delete('/profile/sessions',              [ProfileController::class, 'revokeAllSessions']);
 });
