@@ -11,43 +11,63 @@ class DocumentController extends Controller
 {
     // ── Liste des documents ────────────────────────────────────────────────
     public function index(Request $request): JsonResponse
-    {
-        $user    = $request->user();
-        $isAdmin = $user->hasRole('admin');
+        {
+            $user    = $request->user();
+            $isAdmin = $user->hasRole('admin');
 
-        $query = Document::with(['creator', 'tags', 'folder'])
-            ->where('is_archived', false);
+            $query = Document::with(['creator', 'tags', 'folder'])
+                ->where('is_archived', false);
 
-        if ($isAdmin) {
-            // Admin voit tout
-        } elseif ($user->hasRole('editor')) {
-            $query->where(function($q) use ($user) {
-                $q->where('created_by', $user->id)
-                  ->orWhereIn('status', ['approved', 'published']);
-            });
-        } else {
-            // Lecteur voit SES docs + docs approuvés/publiés
-            $query->where(function($q) use ($user) {
-                $q->where('created_by', $user->id)
-                  ->orWhereIn('status', ['approved', 'published']);
-            });
+            if ($isAdmin) {
+                // Admin voit tout
+            } else {
+                // Dossiers accessibles via groupes
+                $groupFolderIds = \DB::table('folder_group_access')
+                    ->join('user_group_members', 'user_group_members.user_group_id', '=', 'folder_group_access.user_group_id')
+                    ->where('user_group_members.user_id', $user->id)
+                    ->where('folder_group_access.status', 'approved')
+                    ->pluck('folder_group_access.folder_id')
+                    ->toArray();
+
+                // Dossiers partagés directement
+                $sharedFolderIds = \DB::table('folder_shares')
+                    ->where('user_id', $user->id)
+                    ->pluck('folder_id')
+                    ->toArray();
+
+                $accessibleFolderIds = array_unique(
+                    array_merge($groupFolderIds, $sharedFolderIds)
+                );
+
+                $query->where(function($q) use ($user, $accessibleFolderIds) {
+                    // Ses propres documents
+                    $q->where('created_by', $user->id);
+
+                    // Documents approuvés/publiés
+                    $q->orWhereIn('status', ['approved', 'published']);
+
+                    // Documents dans les dossiers accessibles
+                    if (!empty($accessibleFolderIds)) {
+                        $q->orWhereIn('folder_id', $accessibleFolderIds);
+                    }
+                });
+            }
+
+            if ($request->filled('folder_id')) {
+                $query->where('folder_id', $request->folder_id);
+            }
+            if ($request->filled('status')) {
+                $query->where('status', $request->status);
+            }
+            if ($request->filled('search')) {
+                $query->where('name', 'like', '%' . $request->search . '%');
+            }
+
+            $documents = $query->orderByDesc('created_at')
+                ->paginate($request->get('per_page', 20));
+
+            return response()->json($documents);
         }
-
-        if ($request->filled('folder_id')) {
-            $query->where('folder_id', $request->folder_id);
-        }
-        if ($request->filled('status')) {
-            $query->where('status', $request->status);
-        }
-        if ($request->filled('search')) {
-            $query->where('name', 'like', '%' . $request->search . '%');
-        }
-
-        $documents = $query->orderByDesc('created_at')
-            ->paginate($request->get('per_page', 20));
-
-        return response()->json($documents);
-    }
 
     // ── Créer un document ──────────────────────────────────────────────────
     public function store(Request $request): JsonResponse

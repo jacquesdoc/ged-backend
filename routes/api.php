@@ -95,4 +95,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/profile/notifications',            [ProfileController::class, 'updateNotifications']);
     Route::delete('/profile/sessions/{tokenId}',    [ProfileController::class, 'revokeSession']);
     Route::delete('/profile/sessions',              [ProfileController::class, 'revokeAllSessions']);
+
+    // Accès dossiers
+    Route::post('/folders/{folder}/request-access',          [FolderController::class, 'requestAccess']);
+    Route::get('/folder-access-requests',                    [FolderController::class, 'accessRequests']);
+    Route::post('/folder-access-requests/{id}/approve',      [FolderController::class, 'approveAccessRequest']);
+    Route::post('/folder-access-requests/{id}/reject',       [FolderController::class, 'rejectAccessRequest']);
 });
