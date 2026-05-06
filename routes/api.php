@@ -53,10 +53,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/audit/export', [AuditController::class, 'export']);
     Route::get('/audit/stats',  [AuditController::class, 'stats']);
 
-    // Utilisateurs
-    Route::get('/users', function () {
-        return response()->json(
-            \App\Models\User::with('roles')->orderBy('name')->get()
-        );
-    });
+    
+  // Gestion des utilisateurs
+    Route::apiResource('users', \App\Http\Controllers\UserController::class);
+    Route::put('/users/{user}/password',      [\App\Http\Controllers\UserController::class, 'changePassword']);
+    Route::post('/users/{user}/toggle-status',[\App\Http\Controllers\UserController::class, 'toggleStatus']);
+
 });

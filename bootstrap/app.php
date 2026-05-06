@@ -12,10 +12,15 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        $middleware->statefulApi();
+        // Désactiver CSRF pour les routes API
+        $middleware->validateCsrfTokens(except: [
+            'api/*',
+        ]);
 
-        // CORS pour toutes les routes API
+        // CORS
         $middleware->prepend(\Illuminate\Http\Middleware\HandleCors::class);
+
+        $middleware->statefulApi();
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //
