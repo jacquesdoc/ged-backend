@@ -19,18 +19,22 @@ class DashboardController extends Controller
             ? Document::query()
             : Document::where('created_by', $user->id);
 
-        // Activité récente — sans Spatie pour éviter l'erreur
+        // Activité récente — admin voit tout, autres voient seulement les leurs
         $recentActivity = [];
         try {
-            $recentActivity = \Spatie\Activitylog\Models\Activity::with('causer')
+            $activityQuery = \Spatie\Activitylog\Models\Activity::with('causer')
                 ->latest()
-                ->limit(10)
-                ->get()
-                ->map(fn($a) => [
-                    'description' => $a->description,
-                    'user'        => $a->causer?->name ?? 'Système',
-                    'created_at'  => $a->created_at->toISOString(),
-                ]);
+                ->limit(10);
+
+            if (!$isAdmin) {
+                $activityQuery->where('causer_id', $user->id);
+            }
+
+            $recentActivity = $activityQuery->get()->map(fn($a) => [
+                'description' => $a->description,
+                'user'        => $a->causer?->name ?? 'Système',
+                'created_at'  => $a->created_at->toISOString(),
+            ]);
         } catch (\Exception $e) {
             $recentActivity = [];
         }

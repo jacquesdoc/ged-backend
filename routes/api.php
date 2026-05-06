@@ -7,14 +7,16 @@ use App\Http\Controllers\WorkflowController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\TagController;
 use App\Http\Controllers\AuditController;
+use App\Http\Controllers\UserController;
+use App\Http\Controllers\UserGroupController;
 use Illuminate\Support\Facades\Route;
 
-// ── Authentification (routes publiques) ───────────────────────────────────
+// ── Authentification publique ──────────────────────────────────────────────
 Route::prefix('auth')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
 });
 
-// ── Routes protégées (token requis) ───────────────────────────────────────
+// ── Routes protégées ───────────────────────────────────────────────────────
 Route::middleware('auth:sanctum')->group(function () {
 
     // Auth
@@ -48,15 +50,21 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/workflows/{workflow}/cancel',  [WorkflowController::class, 'cancel']);
     Route::get('/pending-approvals',             [WorkflowController::class, 'pendingApprovals']);
 
-    // Journal d'audit
-    Route::get('/audit',        [AuditController::class, 'index']);
-    Route::get('/audit/export', [AuditController::class, 'export']);
-    Route::get('/audit/stats',  [AuditController::class, 'stats']);
+    // Groupes d'utilisateurs
+    Route::apiResource('user-groups', UserGroupController::class);
+    Route::post('/user-groups/{userGroup}/folder-access',          [UserGroupController::class, 'grantFolderAccess']);
+    Route::put('/user-groups/{userGroup}/folder-access/{folder}/approve', [UserGroupController::class, 'approveFolderAccess']);
+    Route::get('/pending-folder-access',                           [UserGroupController::class, 'pendingAccess']);
 
-    
-  // Gestion des utilisateurs
-    Route::apiResource('users', \App\Http\Controllers\UserController::class);
-    Route::put('/users/{user}/password',      [\App\Http\Controllers\UserController::class, 'changePassword']);
-    Route::post('/users/{user}/toggle-status',[\App\Http\Controllers\UserController::class, 'toggleStatus']);
+    // Utilisateurs
+    Route::apiResource('users', UserController::class);
+    Route::put('/users/{user}/password',       [UserController::class, 'changePassword']);
+    Route::post('/users/{user}/toggle-status', [UserController::class, 'toggleStatus']);
 
+    // Journal d'audit — admin seulement
+    Route::middleware('role:admin')->group(function () {
+        Route::get('/audit',        [AuditController::class, 'index']);
+        Route::get('/audit/export', [AuditController::class, 'export']);
+        Route::get('/audit/stats',  [AuditController::class, 'stats']);
+    });
 });

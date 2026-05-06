@@ -12,29 +12,50 @@ class DocumentController extends Controller
 {
     // ── Liste des documents ────────────────────────────────────────────────
     public function index(Request $request): JsonResponse
-    {
-        $query = Document::with(['creator', 'tags', 'folder'])
-            ->active();
+        {
+            $user    = $request->user();
+            $isAdmin = $user->hasRole('admin');
 
-        // Filtre par dossier
-        if ($request->has('folder_id')) {
-            $query->where('folder_id', $request->folder_id);
-        }
+            $query = Document::with(['creator', 'tags', 'folder'])
+                ->where('is_archived', false);
 
-        // Filtre par statut
-        if ($request->has('status')) {
-            $query->where('status', $request->status);
-        }
+            if ($isAdmin) {
+                // Admin voit tout
+            } elseif ($user->hasRole('editor')) {
+                // Éditeur voit ses propres docs + docs approuvés des autres
+                $query->where(function($q) use ($user) {
+                    $q->where('created_by', $user->id)
+                    ->orWhere('status', 'approved')
+                    ->orWhere('status', 'published');
+                });
+            } else {
+                // Lecteur voit uniquement les docs approuvés/publiés
+                $query->where(function($q) use ($user) {
+                    $q->where('status', 'approved')
+                    ->orWhere('status', 'published');
+                });
+            }
 
-        // Recherche par nom
-        if ($request->has('search')) {
-            $query->where('name', 'like', '%' . $request->search . '%');
-        }
+            if ($request->filled('folder_id')) {
+                $query->where('folder_id', $request->folder_id);
+            }
 
-        $documents = $query->orderByDesc('created_at')
-            ->paginate($request->get('per_page', 20));
+            if ($request->filled('status')) {
+                $query->where('status', $request->status);
+            }
 
-        return response()->json($documents);
+            if ($request->filled('search')) {
+                $query->where('name', 'like', '%' . $request->search . '%');
+            }
+
+            if ($request->filled('archived')) {
+                $query->where('is_archived', true);
+            }
+
+            $documents = $query->orderByDesc('created_at')
+                ->paginate($request->get('per_page', 20));
+
+            return response()->json($documents);
     }
 
     // ── Créer un document ──────────────────────────────────────────────────
