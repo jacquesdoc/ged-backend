@@ -13,6 +13,7 @@ use App\Http\Controllers\NotificationController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\DeletionRequestController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\SearchController;
 
 // ── Authentification publique ──────────────────────────────────────────────
 Route::prefix('auth')->group(function () {
@@ -101,4 +102,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/folder-access-requests',                    [FolderController::class, 'accessRequests']);
     Route::post('/folder-access-requests/{id}/approve',      [FolderController::class, 'approveAccessRequest']);
     Route::post('/folder-access-requests/{id}/reject',       [FolderController::class, 'rejectAccessRequest']);
+    
+    // Recherche globale
+    Route::get('/search', [SearchController::class, 'search']);
 });
