@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\Document;
+use App\Models\User;
 use App\Models\Workflow;
 use App\Models\WorkflowApproval;
+use App\Notifications\WorkflowNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -14,9 +16,9 @@ class WorkflowController extends Controller
     public function index(Request $request): JsonResponse
     {
         $workflows = Workflow::with(['document', 'requester', 'approvals.approver'])
-            ->when(!$request->user()->hasRole('admin'), function ($q) use ($request) {
-                $q->where('requested_by', $request->user()->id);
-            })
+            ->when(!$request->user()->hasRole('admin'), fn($q) =>
+                $q->where('requested_by', $request->user()->id)
+            )
             ->orderByDesc('created_at')
             ->paginate(15);
 
@@ -54,7 +56,6 @@ class WorkflowController extends Controller
             'due_date'     => $request->due_date,
         ]);
 
-        // Créer la première approbation
         WorkflowApproval::create([
             'workflow_id' => $workflow->id,
             'approver_id' => $request->approver_ids[0],
@@ -62,9 +63,15 @@ class WorkflowController extends Controller
             'status'      => 'pending',
         ]);
 
-        // Mettre le document en révision
-        Document::find($request->document_id)
-            ->update(['status' => 'review']);
+        Document::find($request->document_id)->update(['status' => 'review']);
+
+        // Notifier le premier approbateur
+        $approver = User::find($request->approver_ids[0]);
+        $approver?->notify(new WorkflowNotification(
+            'submitted',
+            "Nouvelle demande de validation : \"{$workflow->document->name}\"",
+            $workflow
+        ));
 
         activity('workflow')
             ->causedBy($request->user())
@@ -117,15 +124,32 @@ class WorkflowController extends Controller
                 'completed_at' => now(),
             ]);
             $workflow->document->update(['status' => 'approved']);
+
+            // Notifier le demandeur
+            $workflow->requester->notify(new WorkflowNotification(
+                'approved',
+                "✅ Votre document \"{$workflow->document->name}\" a été approuvé !",
+                $workflow,
+                $request->comment
+            ));
         } else {
-            // Passer à l'étape suivante
             $workflow->update(['current_step' => $nextStep]);
+
+            $nextApproverId = $steps[$nextStep - 1]['approver_id'];
             WorkflowApproval::create([
                 'workflow_id' => $workflow->id,
-                'approver_id' => $steps[$nextStep - 1]['approver_id'],
+                'approver_id' => $nextApproverId,
                 'step'        => $nextStep,
                 'status'      => 'pending',
             ]);
+
+            // Notifier le prochain approbateur
+            $nextApprover = User::find($nextApproverId);
+            $nextApprover?->notify(new WorkflowNotification(
+                'submitted',
+                "📋 En attente de votre validation : \"{$workflow->document->name}\"",
+                $workflow
+            ));
         }
 
         return response()->json([
@@ -162,6 +186,19 @@ class WorkflowController extends Controller
         ]);
 
         $workflow->document->update(['status' => 'rejected']);
+
+        // Notifier le demandeur avec le motif
+        $workflow->requester->notify(new WorkflowNotification(
+            'rejected',
+            "❌ Votre document \"{$workflow->document->name}\" a été rejeté.",
+            $workflow,
+            $request->comment
+        ));
+
+        activity('workflow')
+            ->causedBy($request->user())
+            ->performedOn($workflow)
+            ->log('Workflow rejeté : ' . $request->comment);
 
         return response()->json([
             'message'  => 'Rejeté.',

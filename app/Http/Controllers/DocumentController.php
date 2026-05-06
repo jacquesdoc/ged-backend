@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Document;
-use App\Models\Tag;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -12,50 +11,42 @@ class DocumentController extends Controller
 {
     // ── Liste des documents ────────────────────────────────────────────────
     public function index(Request $request): JsonResponse
-        {
-            $user    = $request->user();
-            $isAdmin = $user->hasRole('admin');
+    {
+        $user    = $request->user();
+        $isAdmin = $user->hasRole('admin');
 
-            $query = Document::with(['creator', 'tags', 'folder'])
-                ->where('is_archived', false);
+        $query = Document::with(['creator', 'tags', 'folder'])
+            ->where('is_archived', false);
 
-            if ($isAdmin) {
-                // Admin voit tout
-            } elseif ($user->hasRole('editor')) {
-                // Éditeur voit ses propres docs + docs approuvés des autres
-                $query->where(function($q) use ($user) {
-                    $q->where('created_by', $user->id)
-                    ->orWhere('status', 'approved')
-                    ->orWhere('status', 'published');
-                });
-            } else {
-                // Lecteur voit uniquement les docs approuvés/publiés
-                $query->where(function($q) use ($user) {
-                    $q->where('status', 'approved')
-                    ->orWhere('status', 'published');
-                });
-            }
+        if ($isAdmin) {
+            // Admin voit tout
+        } elseif ($user->hasRole('editor')) {
+            $query->where(function($q) use ($user) {
+                $q->where('created_by', $user->id)
+                  ->orWhereIn('status', ['approved', 'published']);
+            });
+        } else {
+            // Lecteur voit SES docs + docs approuvés/publiés
+            $query->where(function($q) use ($user) {
+                $q->where('created_by', $user->id)
+                  ->orWhereIn('status', ['approved', 'published']);
+            });
+        }
 
-            if ($request->filled('folder_id')) {
-                $query->where('folder_id', $request->folder_id);
-            }
+        if ($request->filled('folder_id')) {
+            $query->where('folder_id', $request->folder_id);
+        }
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+        if ($request->filled('search')) {
+            $query->where('name', 'like', '%' . $request->search . '%');
+        }
 
-            if ($request->filled('status')) {
-                $query->where('status', $request->status);
-            }
+        $documents = $query->orderByDesc('created_at')
+            ->paginate($request->get('per_page', 20));
 
-            if ($request->filled('search')) {
-                $query->where('name', 'like', '%' . $request->search . '%');
-            }
-
-            if ($request->filled('archived')) {
-                $query->where('is_archived', true);
-            }
-
-            $documents = $query->orderByDesc('created_at')
-                ->paginate($request->get('per_page', 20));
-
-            return response()->json($documents);
+        return response()->json($documents);
     }
 
     // ── Créer un document ──────────────────────────────────────────────────
@@ -78,21 +69,19 @@ class DocumentController extends Controller
             'status'      => 'draft',
         ];
 
-        // Upload du fichier
         if ($request->hasFile('file')) {
-            $file           = $request->file('file');
-            $path           = $file->store('documents', 'local');
-            $data['file_path']  = $path;
-            $data['file_name']  = $file->getClientOriginalName();
-            $data['file_size']  = $file->getSize();
-            $data['mime_type']  = $file->getMimeType();
-            $data['extension']  = $file->getClientOriginalExtension();
-            $data['checksum']   = hash_file('sha256', $file->getRealPath());
+            $file              = $request->file('file');
+            $path              = $file->store('documents', 'local');
+            $data['file_path'] = $path;
+            $data['file_name'] = $file->getClientOriginalName();
+            $data['file_size'] = $file->getSize();
+            $data['mime_type'] = $file->getMimeType();
+            $data['extension'] = $file->getClientOriginalExtension();
+            $data['checksum']  = hash_file('sha256', $file->getRealPath());
         }
 
         $document = Document::create($data);
 
-        // Attacher les tags
         if ($request->has('tag_ids')) {
             $document->tags()->sync($request->tag_ids);
         }
@@ -114,7 +103,7 @@ class DocumentController extends Controller
         $document->load([
             'creator', 'tags', 'folder',
             'versions.creator', 'comments.user',
-            'sharedWith', 'workflows.approvals.approver'
+            'workflows.approvals.approver'
         ]);
 
         return response()->json($document);
@@ -163,10 +152,10 @@ class DocumentController extends Controller
         return response()->json(['message' => 'Document supprimé.']);
     }
 
-    // ── Télécharger un document ────────────────────────────────────────────
+    // ── Télécharger ────────────────────────────────────────────────────────
     public function download(Document $document): mixed
     {
-        if (! Storage::exists($document->file_path)) {
+        if (!$document->file_path || !Storage::exists($document->file_path)) {
             return response()->json(['message' => 'Fichier introuvable.'], 404);
         }
 
@@ -178,7 +167,24 @@ class DocumentController extends Controller
         return Storage::download($document->file_path, $document->file_name);
     }
 
-    // ── Archiver un document ───────────────────────────────────────────────
+    // ── Prévisualiser ──────────────────────────────────────────────────────
+    public function preview(Document $document): mixed
+    {
+        if (!$document->file_path || !Storage::exists($document->file_path)) {
+            return response()->json(['message' => 'Fichier introuvable.'], 404);
+        }
+
+        $path     = Storage::path($document->file_path);
+        $mimeType = $document->mime_type ?: mime_content_type($path);
+
+        return response()->file($path, [
+            'Content-Type'        => $mimeType,
+            'Content-Disposition' => 'inline; filename="' . $document->file_name . '"',
+            'Cache-Control'       => 'no-cache',
+        ]);
+    }
+
+    // ── Archiver ───────────────────────────────────────────────────────────
     public function archive(Document $document): JsonResponse
     {
         $document->update([
@@ -190,7 +196,7 @@ class DocumentController extends Controller
         return response()->json(['message' => 'Document archivé.']);
     }
 
-    // ── Restaurer un document archivé ──────────────────────────────────────
+    // ── Restaurer ──────────────────────────────────────────────────────────
     public function restore(Document $document): JsonResponse
     {
         $document->update([
@@ -199,7 +205,10 @@ class DocumentController extends Controller
             'status'      => 'draft',
         ]);
 
-        return response()->json(['message' => 'Document restauré.', 'document' => $document]);
+        return response()->json([
+            'message'  => 'Document restauré.',
+            'document' => $document,
+        ]);
     }
 
     // ── Ajouter un commentaire ─────────────────────────────────────────────

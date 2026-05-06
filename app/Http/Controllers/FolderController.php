@@ -86,4 +86,36 @@ class FolderController extends Controller
 
         return response()->json($tree);
     }
+    
+        public function myAccessibleFolders(Request $request): JsonResponse
+        {
+            $user = $request->user();
+
+            // Dossiers créés par l'utilisateur
+            $ownFolders = Folder::where('created_by', $user->id)
+                ->withCount('documents')
+                ->get()
+                ->map(fn($f) => array_merge($f->toArray(), ['access_type' => 'owner']));
+
+            // Dossiers accessibles via les groupes
+            $groupFolders = \DB::table('folder_group_access')
+                ->join('folders', 'folders.id', '=', 'folder_group_access.folder_id')
+                ->join('user_group_members', 'user_group_members.user_group_id', '=', 'folder_group_access.user_group_id')
+                ->join('user_groups', 'user_groups.id', '=', 'folder_group_access.user_group_id')
+                ->where('user_group_members.user_id', $user->id)
+                ->where('folder_group_access.status', 'approved')
+                ->select(
+                    'folders.*',
+                    'folder_group_access.permission',
+                    'user_groups.name as group_name'
+                )
+                ->get()
+                ->map(fn($f) => array_merge((array)$f, ['access_type' => 'group']));
+
+            return response()->json([
+                'own_folders'   => $ownFolders,
+                'group_folders' => $groupFolders,
+            ]);
+        }
+
 }

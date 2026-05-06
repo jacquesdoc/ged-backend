@@ -9,12 +9,16 @@ use App\Http\Controllers\TagController;
 use App\Http\Controllers\AuditController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\UserGroupController;
+use App\Http\Controllers\NotificationController;
 use Illuminate\Support\Facades\Route;
 
 // ── Authentification publique ──────────────────────────────────────────────
 Route::prefix('auth')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
 });
+
+// ── Prévisualisation publique ──────────────────────────────────────────────
+Route::get('/documents/{document}/preview', [DocumentController::class, 'preview']);
 
 // ── Routes protégées ───────────────────────────────────────────────────────
 Route::middleware('auth:sanctum')->group(function () {
@@ -28,17 +32,23 @@ Route::middleware('auth:sanctum')->group(function () {
     // Dashboard
     Route::get('/dashboard/stats', [DashboardController::class, 'stats']);
 
+    // Notifications — accessible à TOUS les utilisateurs connectés
+    Route::get('/notifications',             [NotificationController::class, 'index']);
+    Route::get('/notifications/unread',      [NotificationController::class, 'unread']);
+    Route::post('/notifications/{id}/read',  [NotificationController::class, 'markRead']);
+    Route::post('/notifications/read-all',   [NotificationController::class, 'markAll']);
+
     // Documents
     Route::apiResource('documents', DocumentController::class);
     Route::get('/documents/{document}/download',  [DocumentController::class, 'download']);
-    Route::get('/documents/{document}/preview',   [DocumentController::class, 'preview']);
     Route::post('/documents/{document}/archive',  [DocumentController::class, 'archive']);
     Route::post('/documents/{document}/restore',  [DocumentController::class, 'restore']);
     Route::post('/documents/{document}/comments', [DocumentController::class, 'addComment']);
 
     // Dossiers
     Route::apiResource('folders', FolderController::class);
-    Route::get('/folders/tree/all', [FolderController::class, 'tree']);
+    Route::get('/folders/tree/all',  [FolderController::class, 'tree']);
+    Route::get('/my-folders',        [FolderController::class, 'myAccessibleFolders']);
 
     // Tags
     Route::apiResource('tags', TagController::class);
@@ -52,9 +62,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Groupes d'utilisateurs
     Route::apiResource('user-groups', UserGroupController::class);
-    Route::post('/user-groups/{userGroup}/folder-access',          [UserGroupController::class, 'grantFolderAccess']);
+    Route::post('/user-groups/{userGroup}/folder-access',                 [UserGroupController::class, 'grantFolderAccess']);
     Route::put('/user-groups/{userGroup}/folder-access/{folder}/approve', [UserGroupController::class, 'approveFolderAccess']);
-    Route::get('/pending-folder-access',                           [UserGroupController::class, 'pendingAccess']);
+    Route::get('/pending-folder-access',                                  [UserGroupController::class, 'pendingAccess']);
 
     // Utilisateurs
     Route::apiResource('users', UserController::class);
