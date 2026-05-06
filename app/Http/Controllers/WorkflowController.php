@@ -243,9 +243,27 @@ class WorkflowController extends Controller
         return response()->json($workflow);
     }
 
-    public function destroy(Workflow $workflow): JsonResponse
+    public function destroy(Request $request, Workflow $workflow): JsonResponse
     {
+        // Seul l'admin ou le créateur (éditeur) peut supprimer
+        if (!$request->user()->hasRole('admin')
+            && $workflow->requested_by !== $request->user()->id) {
+            return response()->json(['message' => 'Non autorisé.'], 403);
+        }
+
+        // Remettre le document en brouillon si le workflow est supprimé
+        if ($workflow->document) {
+            $workflow->document->update(['status' => 'draft']);
+        }
+
+        activity('workflow')
+            ->causedBy($request->user())
+            ->performedOn($workflow)
+            ->log('Workflow supprimé');
+
+        $workflow->approvals()->delete();
         $workflow->delete();
+
         return response()->json(['message' => 'Workflow supprimé.']);
     }
 }

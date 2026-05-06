@@ -11,6 +11,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\UserGroupController;
 use App\Http\Controllers\NotificationController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\DeletionRequestController;
 
 // ── Authentification publique ──────────────────────────────────────────────
 Route::prefix('auth')->group(function () {
@@ -77,4 +78,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/audit/export', [AuditController::class, 'export']);
         Route::get('/audit/stats',  [AuditController::class, 'stats']);
     });
+    // Demandes de suppression
+    Route::get('/deletion-requests',                          [DeletionRequestController::class, 'index']);
+    Route::get('/deletion-requests/pending',                  [DeletionRequestController::class, 'pending']);
+    Route::post('/deletion-requests',                         [DeletionRequestController::class, 'store']);
+    Route::post('/deletion-requests/{deletionRequest}/approve',[DeletionRequestController::class, 'approve']);
+    Route::post('/deletion-requests/{deletionRequest}/reject', [DeletionRequestController::class, 'reject']);
+    Route::get('/my-deletion-requests',                       [DeletionRequestController::class, 'myRequests']);
 });
