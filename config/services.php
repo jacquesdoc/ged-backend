@@ -35,4 +35,14 @@ return [
         ],
     ],
 
+    'ocr' => [
+    'url' => env('OCR_SERVICE_URL', 'http://localhost:8001'),
+    ],
+
+    'groq' => [
+        'key'   => env('GROQ_API_KEY'),
+        'model' => env('GROQ_MODEL', 'llama-3.1-8b-instant'),
+        'url'   => 'https://api.groq.com/openai/v1/chat/completions',
+    ],
+
 ];

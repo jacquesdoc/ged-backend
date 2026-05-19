@@ -16,6 +16,11 @@ class Document extends Model
         'created_by', 'status', 'is_locked', 'locked_by',
         'locked_at', 'version', 'metadata', 'checksum',
         'is_archived', 'archived_at', 'expires_at',
+        'ocr_text',
+        'ocr_confidence',
+        'ocr_processed_at',
+        'ocr_status',
+        'metadata',
     ];
 
     protected $casts = [
@@ -26,6 +31,10 @@ class Document extends Model
         'archived_at' => 'datetime',
         'expires_at'  => 'datetime',
         'metadata'    => 'array',
+        'ocr_processed_at' => 'datetime',
+        'ocr_confidence'   => 'float',
+        'metadata'         => 'array',
+
     ];
 
     // ── Relations ──────────────────────────────────────────────────────────

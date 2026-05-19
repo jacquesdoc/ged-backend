@@ -14,6 +14,11 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\DeletionRequestController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SearchController;
+use App\Http\Controllers\OcrController;
+use App\Http\Controllers\LlmController;
+use App\Http\Controllers\GedAssistantController;
+use App\Http\Controllers\SemanticSearchController;
+use App\Http\Controllers\ChatSearchController;
 
 // ── Authentification publique ──────────────────────────────────────────────
 Route::prefix('auth')->group(function () {
@@ -105,4 +110,26 @@ Route::middleware('auth:sanctum')->group(function () {
     
     // Recherche globale
     Route::get('/search', [SearchController::class, 'search']);
+
+        // OCR
+    Route::get('/ocr/status',                  [OcrController::class, 'status']);
+    Route::post('/documents/{document}/ocr',   [OcrController::class, 'process']);
+    Route::get('/documents/{document}/ocr',    [OcrController::class, 'getText']);
+
+    // LLM / IA
+    Route::get('/ai/status',                        [LlmController::class, 'status']);
+    Route::post('/documents/{document}/ai/analyze', [LlmController::class, 'analyze']);
+    Route::post('/documents/{document}/ai/summary', [LlmController::class, 'summarize']);
+    Route::post('/documents/{document}/ai/chat',    [LlmController::class, 'chat']);
+
+    // Assistant GED
+    Route::post('/assistant/chat',       [GedAssistantController::class, 'chat']);
+    Route::get('/assistant/suggestions', [GedAssistantController::class, 'suggestions']);
+
+    // Recherche semantique
+    Route::post('/semantic-search',       [SemanticSearchController::class, 'search']);
+    Route::get('/semantic-search/status', [SemanticSearchController::class, 'indexStatus']);
+
+    Route::post('/chat-search',             [ChatSearchController::class, 'chat']);
+    Route::get('/chat-search/suggestions',  [ChatSearchController::class, 'suggestions']);
 });

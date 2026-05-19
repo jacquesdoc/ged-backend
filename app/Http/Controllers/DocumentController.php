@@ -5,7 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\Document;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 
 class DocumentController extends Controller
 {
@@ -87,17 +89,43 @@ class DocumentController extends Controller
             'folder_id'   => $request->folder_id,
             'created_by'  => $request->user()->id,
             'status'      => 'draft',
+            'ocr_status'  => 'pending',
         ];
 
         if ($request->hasFile('file')) {
-            $file              = $request->file('file');
+            $file      = $request->file('file');
+            $mimeType  = $file->getMimeType();
+            $extension = strtolower($file->getClientOriginalExtension());
+
             $path              = $file->store('documents', 'local');
             $data['file_path'] = $path;
             $data['file_name'] = $file->getClientOriginalName();
             $data['file_size'] = $file->getSize();
-            $data['mime_type'] = $file->getMimeType();
-            $data['extension'] = $file->getClientOriginalExtension();
+            $data['mime_type'] = $mimeType;
+            $data['extension'] = $extension;
             $data['checksum']  = hash_file('sha256', $file->getRealPath());
+
+            $supportedMimes = [
+                'image/jpeg', 'image/jpg', 'image/png',
+                'image/bmp', 'image/tiff', 'image/webp',
+                'application/pdf',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'application/msword',
+                'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                'application/vnd.ms-powerpoint',
+            ];
+
+            $supportedExtensions = [
+                'jpg', 'jpeg', 'png', 'bmp', 'tiff', 'tif',
+                'webp', 'pdf', 'docx', 'doc', 'pptx', 'ppt'
+            ];
+
+            $isSupported = in_array($mimeType, $supportedMimes)
+                        || in_array($extension, $supportedExtensions);
+
+            $data['ocr_status'] = $isSupported ? 'pending' : 'not_supported';
+        } else {
+            $data['ocr_status'] = 'not_supported';
         }
 
         $document = Document::create($data);
@@ -109,13 +137,50 @@ class DocumentController extends Controller
         activity('document')
             ->causedBy($request->user())
             ->performedOn($document)
-            ->log('Document créé');
+            ->log('Document cree');
+
+        // Lancer OCR automatiquement
+        if ($data['ocr_status'] === 'pending') {
+            $this->runOcrAsync($document);
+        }
 
         return response()->json([
-            'message'  => 'Document créé avec succès.',
+            'message'  => 'Document cree avec succes.',
             'document' => $document->load(['creator', 'tags', 'folder']),
         ], 201);
     }
+
+private function runOcrAsync(Document $document): void
+{
+    try {
+        $document->update(['ocr_status' => 'processing']);
+
+        $filePath = Storage::path($document->file_path);
+
+        $response = Http::timeout(120)
+            ->attach(
+                'file',
+                file_get_contents($filePath),
+                $document->file_name ?? basename($document->file_path)
+            )
+            ->post(config('services.ocr.url') . '/ocr');
+
+        if ($response->successful()) {
+            $data = $response->json();
+            $document->update([
+                'ocr_text'         => $data['text'] ?? '',
+                'ocr_confidence'   => $data['confidence'] ?? 0,
+                'ocr_processed_at' => now(),
+                'ocr_status'       => 'done',
+            ]);
+        } else {
+            $document->update(['ocr_status' => 'failed']);
+        }
+    } catch (\Exception $e) {
+        $document->update(['ocr_status' => 'failed']);
+        \Log::error("OCR auto failed for document {$document->id}: " . $e->getMessage());
+    }
+}
 
     // ── Détail d'un document ───────────────────────────────────────────────
     public function show(Document $document): JsonResponse
